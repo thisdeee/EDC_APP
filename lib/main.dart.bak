@@ -1,0 +1,1747 @@
+import 'package:flutter/material.dart';
+import 'pages/product_list_page.dart';
+
+void main() async {
+  runApp(const PosApp());
+}
+
+class PosApp extends StatelessWidget {
+  const PosApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Simple POS',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.pink),
+        useMaterial3: true,
+      ),
+      home: const ProductListPage(),
+    );
+  }
+}
+
+}
+
+// API Service
+class ApiService {
+  static const String baseUrl = 'https://api.bbbb.com.la';
+
+  // Send GraphQL request using http package
+  static Future<Map<String, dynamic>> _sendGraphQLRequest({
+    required String query,
+    required Map<String, dynamic> variables,
+  }) async {
+    final response = await http
+        .post(
+      Uri.parse(baseUrl),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: json.encode({
+        'query': query,
+        'variables': variables,
+      }),
+    )
+        .timeout(
+      const Duration(seconds: 30),
+      onTimeout: () {
+        throw TimeoutException('Connection timeout after 30 seconds');
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('HTTP ${response.statusCode}: ${response.body}');
+    }
+  }
+
+  static Future<List<Product>> fetchProducts() async {
+    try {
+      print('========== GraphQL API REQUEST ==========');
+      print('Connecting to: $baseUrl');
+
+      // GraphQL Query
+      const String query = '''
+        query StocksV2(\$where: StockWhereInput, \$skip: Int, \$limit: Int) {
+          stocksV2(where: \$where, skip: \$skip, limit: \$limit) {
+            total
+            data {
+              amount
+              id
+              image
+              name
+              price
+              amountAll
+              descriptions {
+                image
+                title
+              }
+              unit
+              coverImages
+              containImages
+              isUsingSalePage
+            }
+          }
+        }
+      ''';
+
+      // Variables with shop ID
+      final variables = {
+        'where': {
+          'shop': '6864d7d2f32c2508f58eb7e8',
+        },
+        'skip': 0,
+        'limit': 100,
+      };
+
+      print('Variables: $variables');
+
+      // Send GraphQL request
+      final response = await _sendGraphQLRequest(
+        query: query,
+        variables: variables,
+      );
+
+      print('========== GraphQL RESPONSE ==========');
+      print('✅ Response received successfully');
+
+      // Check for GraphQL errors
+      if (response.containsKey('errors')) {
+        print('❌ GraphQL Errors: ${response['errors']}');
+        throw Exception('GraphQL Error: ${response['errors']}');
+      }
+
+      final data = response['data'];
+      if (data == null) {
+        print('⚠️ No data in response');
+        throw Exception('No data returned from API');
+      }
+
+      // Parse response
+      if (data.containsKey('stocksV2')) {
+        final stocksV2 = data['stocksV2'];
+
+        if (stocksV2 is Map && stocksV2.containsKey('data')) {
+          final productsData = stocksV2['data'] as List<dynamic>;
+          final total = stocksV2['total'];
+
+          print('✅ Total products from API: $total');
+          print('✅ Products array length: ${productsData.length}');
+
+          if (productsData.isEmpty) {
+            print('⚠️ Empty products list from API');
+            return [];
+          }
+
+          final products =
+              productsData.map((json) => Product.fromJson(json)).toList();
+          print('✅ Successfully created ${products.length} Product objects');
+          return products;
+        }
+      }
+
+      print('⚠️ Unexpected response structure');
+      throw Exception('Invalid API response structure');
+    } on TimeoutException {
+      print('========== REQUEST TIMEOUT ==========');
+      print('Connection timeout after 30 seconds');
+      throw Exception(
+          'Connection timeout - please check your internet connection');
+    } catch (e) {
+      print('❌ Error fetching products: $e');
+      rethrow;
+    }
+  }
+
+  // Payment Gateway API - PhaJay Payment Link
+  static Future<Map<String, dynamic>> createPaymentLink({
+    required double amount,
+    required String orderNo,
+    required String description,
+    required String apiKey,
+    String? tag1,
+    String? tag2,
+    String? tag3,
+  }) async {
+    try {
+      print('========== PHAJAY PAYMENT GATEWAY REQUEST ==========');
+      print('Creating payment link for order: $orderNo');
+      print('Amount: $amount LAK');
+      print('Description: $description');
+
+      // Encode API key to Base64 for Basic Auth
+      final basicAuth = base64Encode(utf8.encode(apiKey));
+      
+      // Build request body according to PhaJay API spec
+      final requestBody = {
+        'orderNo': orderNo,
+        'amount': amount,
+        'description': description,
+      };
+      
+      // Add optional tags if provided
+      if (tag1 != null) requestBody['tag1'] = tag1;
+      if (tag2 != null) requestBody['tag2'] = tag2;
+      if (tag3 != null) requestBody['tag3'] = tag3;
+      
+      print('Request body: $requestBody');
+      
+      final response = await http.post(
+        Uri.parse('https://payment-gateway.phajay.co/v1/api/link/payment-link'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Basic $basicAuth',
+        },
+        body: json.encode(requestBody),
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw TimeoutException('Payment gateway timeout after 30 seconds');
+        },
+      );
+
+      print('========== PAYMENT GATEWAY RESPONSE ==========');
+      print('Status Code: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+        
+        // Check for successful response
+        if (data['message'] == 'SUCCESSFULLY' && data['redirectURL'] != null) {
+          print('✅ Payment link created successfully');
+          print('Redirect URL: ${data['redirectURL']}');
+          print('Order No: ${data['orderNo']}');
+          return data;
+        } else {
+          print('❌ Unexpected response format: $data');
+          throw Exception('Invalid response from payment gateway');
+        }
+      } else {
+        print('❌ Payment gateway error: ${response.body}');
+        throw Exception('Payment gateway error: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Error creating payment link: $e');
+      rethrow;
+    }
+  }
+}
+
+// Global cart state
+class CartState {
+  static final Map<String, CartItem> _cart = {};
+  static Map<String, CartItem> get cart => _cart;
+
+  static void addToCart(Product p) {
+    final existing = _cart[p.id];
+    if (existing != null) {
+      existing.qty += 1;
+    } else {
+      _cart[p.id] = CartItem(product: p, qty: 1);
+    }
+  }
+
+  static void changeQty(String productId, int delta) {
+    final item = _cart[productId];
+    if (item == null) return;
+    item.qty += delta;
+    if (item.qty <= 0) {
+      _cart.remove(productId);
+    }
+  }
+
+  static void clear() {
+    _cart.clear();
+  }
+
+  static double get subtotal =>
+      _cart.values.fold(0.0, (s, i) => s + i.lineTotal);
+  static double get tax => subtotal * 0.07;
+  static double get total => subtotal + tax;
+  static int get itemCount =>
+      _cart.values.fold(0, (sum, item) => sum + item.qty);
+}
+
+// Widget that tries multiple image paths
+class _ImageWithMultiplePaths extends StatefulWidget {
+  final List<String> paths;
+  final double iconSize;
+
+  const _ImageWithMultiplePaths({
+    required this.paths,
+    required this.iconSize,
+  });
+
+  @override
+  State<_ImageWithMultiplePaths> createState() =>
+      _ImageWithMultiplePathsState();
+}
+
+class _ImageWithMultiplePathsState extends State<_ImageWithMultiplePaths> {
+  int _currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_currentIndex >= widget.paths.length) {
+      return Container(
+        color: Colors.grey[300],
+        child: Center(
+          child: Icon(Icons.shopping_bag,
+              size: widget.iconSize, color: Colors.grey),
+        ),
+      );
+    }
+
+    return Image.network(
+      widget.paths[_currentIndex],
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Center(
+          child: CircularProgressIndicator(
+            value: loadingProgress.expectedTotalBytes != null
+                ? loadingProgress.cumulativeBytesLoaded /
+                    loadingProgress.expectedTotalBytes!
+                : null,
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        if (_currentIndex < widget.paths.length - 1) {
+          Future.microtask(() {
+            if (mounted) setState(() => _currentIndex++);
+          });
+          return const Center(child: CircularProgressIndicator());
+        }
+        return Container(
+          color: Colors.grey[300],
+          child: Center(
+            child: Icon(Icons.shopping_bag,
+                size: widget.iconSize, color: Colors.grey),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// Page 1: Product List
+class ProductListPage extends StatefulWidget {
+  const ProductListPage({super.key});
+
+  @override
+  State<ProductListPage> createState() => _ProductListPageState();
+}
+
+class _ProductListPageState extends State<ProductListPage> {
+  List<Product> _catalog = [];
+  bool _isLoading = true;
+  String? _error;
+
+  String _query = '';
+  String _category = 'All';
+  String _stockFilter = 'All'; // All, In Stock, Out of Stock
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  Future<void> _loadProducts() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final products = await ApiService.fetchProducts();
+      setState(() {
+        _catalog = products;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _addToCart(Product p) {
+    // Check if product is in stock
+    if ((p.stock ?? 0) <= 0 || !p.isUsingSalePage) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('This product is out of stock'),
+          duration: const Duration(seconds: 1),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    setState(() {
+      CartState.addToCart(p);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${p.name} added to cart'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  // Helper to build image with multiple fallback URLs
+  Widget _buildImageWithFallback(
+      String? filename, String productId, double iconSize) {
+    if (filename == null || filename.isEmpty) {
+      return Container(
+        color: Colors.grey[300],
+        child: Center(
+          child: Icon(
+            Icons.shopping_bag,
+            size: iconSize,
+            color: Colors.grey,
+          ),
+        ),
+      );
+    }
+
+    // If already full URL, use it
+    if (filename.startsWith('http')) {
+      return Image.network(
+        filename,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded /
+                      loadingProgress.expectedTotalBytes!
+                  : null,
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: Colors.grey[300],
+            child: Center(
+              child: Icon(
+                Icons.shopping_bag,
+                size: iconSize,
+                color: Colors.grey,
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    // Try multiple paths for the filename
+    // Convert .png to .jpg for S3, and try both extensions
+    final filenameWithoutExt = filename.replaceAll(
+        RegExp(r'\.(png|jpg|jpeg)$', caseSensitive: false), '');
+
+    final paths = [
+      'https://lailaocf-bucket.s3.amazonaws.com/resized/medium/$filenameWithoutExt.jpg',
+      'https://lailaocf-bucket.s3.amazonaws.com/resized/medium/$filename',
+      'https://lailaocf-bucket.s3.amazonaws.com/resized/large/$filenameWithoutExt.jpg',
+      'https://lailaocf-bucket.s3.amazonaws.com/resized/small/$filenameWithoutExt.jpg',
+      'https://lailaocf-bucket.s3.amazonaws.com/$filenameWithoutExt.jpg',
+      'https://lailaocf-bucket.s3.amazonaws.com/$filename',
+    ];
+
+    return _ImageWithMultiplePaths(
+      paths: paths,
+      iconSize: iconSize,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final categories = [
+      'All',
+      ...{for (final p in _catalog) p.category}
+    ];
+    final filtered = _catalog.where((p) {
+      final matchesQuery =
+          _query.isEmpty || p.name.toLowerCase().contains(_query.toLowerCase());
+      //***final matchesCat = _category == 'All' || p.category == _category;***//
+      final matchesStock = _stockFilter == 'All' ||
+          (_stockFilter == 'In Stock' && p.isUsingSalePage == true) ||
+          (_stockFilter == 'Out of Stock' && p.isUsingSalePage == false);
+      return matchesQuery && matchesStock;
+    }).toList();
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F6FA),
+      appBar: AppBar(
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFE91E63), Color(0xFF9C27B0)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        foregroundColor: Colors.white,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('4B',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text('+856 020 00000000', style: TextStyle(fontSize: 12)),
+          ],
+        ),
+        actions: [
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.shopping_cart),
+                onPressed: () {
+                  if (CartState.itemCount > 0) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const CartPage()),
+                    ).then((_) => setState(() {}));
+                  }
+                },
+              ),
+              if (CartState.itemCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '${CartState.itemCount}',
+                      style: const TextStyle(color: Colors.white, fontSize: 10),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    prefixIcon: const Icon(Icons.search),
+                    hintText: 'Search products...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onChanged: (v) => setState(() => _query = v),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('ຜະລິດຕະພັນຍອດນິຍົມ',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
+                    Row(
+                      children: [
+                        DropdownButton<String>(
+                          value: _stockFilter,
+                          underline: const SizedBox(),
+                          items: [
+                            DropdownMenuItem(
+                                value: 'All', child: Text('All Stock')),
+                            DropdownMenuItem(
+                                value: 'In Stock', child: Text('In Stock')),
+                            DropdownMenuItem(
+                                value: 'Out of Stock',
+                                child: Text('Out of Stock')),
+                          ],
+                          onChanged: (v) =>
+                              setState(() => _stockFilter = v ?? 'All'),
+                        ),
+                        const SizedBox(width: 8),
+                        DropdownButton<String>(
+                          value: _category,
+                          underline: const SizedBox(),
+                          items: categories
+                              .map((c) =>
+                                  DropdownMenuItem(value: c, child: Text(c)))
+                              .toList(),
+                          onChanged: (v) =>
+                              setState(() => _category = v ?? 'All'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.error_outline,
+                                  size: 48, color: Colors.red),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Error: $_error',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: _loadProducts,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : _catalog.isEmpty
+                        ? const Center(child: Text('No products available'))
+                        : GridView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              childAspectRatio: 0.7,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                            ),
+                            itemCount: filtered.length,
+                            itemBuilder: (ctx, i) {
+                              final p = filtered[i];
+                              return Card(
+                                elevation: 2,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                                child: InkWell(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (_) =>
+                                              ProductDetailPage(product: p)),
+                                    ).then((_) => setState(() {}));
+                                  },
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey[200],
+                                            borderRadius:
+                                                const BorderRadius.vertical(
+                                                    top: Radius.circular(12)),
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius:
+                                                const BorderRadius.vertical(
+                                                    top: Radius.circular(12)),
+                                            child: _buildImageWithFallback(
+                                              p.imageUrl,
+                                              '${p.id}',
+                                              60,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.all(8.0),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              p.name,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w500),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              p.stock != null
+                                                  ? 'ຈຳນວນ: ${p.stock}'
+                                                  : 'ຈຳນວນ: -',
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.grey[600]),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
+                                              children: [
+                                                Text(
+                                                  '₭ ${p.price.toStringAsFixed(0)}',
+                                                  style: const TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Color(0xFFE91E63)),
+                                                ),
+                                                SizedBox(
+                                                  height: 28,
+                                                  child: ElevatedButton(
+                                                    onPressed: ((p.stock ?? 0) <= 0 || !p.isUsingSalePage)
+                                                        ? null
+                                                        : () => _addToCart(p),
+                                                    style: ElevatedButton
+                                                        .styleFrom(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 8),
+                                                      backgroundColor:
+                                                          const Color(
+                                                              0xFFE91E63),
+                                                      foregroundColor:
+                                                          Colors.white,
+                                                      disabledBackgroundColor:
+                                                          Colors.grey[400],
+                                                      disabledForegroundColor:
+                                                          Colors.grey[600],
+                                                    ),
+                                                    child: Text(
+                                                        ((p.stock ?? 0) <= 0 || !p.isUsingSalePage)
+                                                            ? 'ໝົດ'
+                                                            : 'ເພີ່ມ',
+                                                        style: const TextStyle(
+                                                            fontSize: 12)),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Product Detail Page
+class ProductDetailPage extends StatefulWidget {
+  final Product product;
+  const ProductDetailPage({super.key, required this.product});
+
+  @override
+  State<ProductDetailPage> createState() => _ProductDetailPageState();
+}
+
+class _ProductDetailPageState extends State<ProductDetailPage> {
+  int _qty = 1;
+
+  void _addToCart() {
+    // Check if product is in stock
+    if ((widget.product.stock ?? 0) <= 0 || !widget.product.isUsingSalePage) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('This product is out of stock'),
+          duration: const Duration(seconds: 1),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    for (int i = 0; i < _qty; i++) {
+      CartState.addToCart(widget.product);
+    }
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${widget.product.name} x$_qty added to cart'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFE91E63), Color(0xFF9C27B0)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        foregroundColor: Colors.white,
+        title: const Text('Product Detail'),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    height: 300,
+                    color: Colors.grey[200],
+                    child: Image.network(
+                      widget.product.imageUrl?.isNotEmpty == true
+                          ? widget.product.imageUrl!
+                          : 'https://picsum.photos/seed/${widget.product.id}/600/400',
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey[300],
+                          child: const Center(
+                            child: Icon(
+                              Icons.shopping_bag,
+                              size: 100,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        );
+                      },
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.product.name,
+                          style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.product.category,
+                          style:
+                              TextStyle(fontSize: 14, color: Colors.grey[600]),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          '₭ ${widget.product.price.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFE91E63),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        const Text(
+                          'Description',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.product.description?.isNotEmpty == true
+                              ? widget.product.description!
+                              : 'This is a high-quality ${widget.product.name}. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+                          style:
+                              TextStyle(fontSize: 14, color: Colors.grey[800]),
+                        ),
+                        const SizedBox(height: 24),
+                        const Text(
+                          'Quantity',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            IconButton(
+                              onPressed: () {
+                                if (_qty > 1) setState(() => _qty--);
+                              },
+                              icon: const Icon(Icons.remove_circle_outline),
+                              iconSize: 32,
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 8),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey[300]!),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '$_qty',
+                                style: const TextStyle(
+                                    fontSize: 20, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () => setState(() => _qty++),
+                              icon: const Icon(Icons.add_circle_outline),
+                              iconSize: 32,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _addToCart,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: const Color(0xFFE91E63),
+                ),
+                icon: const Icon(Icons.add_shopping_cart),
+                label: Text(
+                  'Add to Cart (₭ ${(widget.product.price * _qty).toStringAsFixed(0)})',
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Page 2: Cart Review
+class CartPage extends StatefulWidget {
+  const CartPage({super.key});
+
+  @override
+  State<CartPage> createState() => _CartPageState();
+}
+
+class _CartPageState extends State<CartPage> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFE91E63), Color(0xFF9C27B0)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        foregroundColor: Colors.white,
+        title: const Text('Cart'),
+      ),
+      body: CartState.cart.isEmpty
+          ? const Center(child: Text('No items in cart'))
+          : Column(
+              children: [
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.all(12),
+                    children: CartState.cart.values.map((item) {
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 60,
+                                height: 60,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[200],
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    item.product.imageUrl?.isNotEmpty == true
+                                        ? item.product.imageUrl!
+                                        : 'https://picsum.photos/seed/${item.product.id}/100/100',
+                                    fit: BoxFit.cover,
+                                    width: 60,
+                                    height: 60,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        color: Colors.grey[300],
+                                        child: const Icon(
+                                          Icons.shopping_bag,
+                                          size: 30,
+                                          color: Colors.grey,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.product.name,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                        '₭ ${item.product.price.toStringAsFixed(0)}',
+                                        style: const TextStyle(
+                                            color: Color(0xFFE91E63))),
+                                  ],
+                                ),
+                              ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon:
+                                        const Icon(Icons.remove_circle_outline),
+                                    onPressed: () => setState(() =>
+                                        CartState.changeQty(
+                                            item.product.id, -1)),
+                                  ),
+                                  Text('${item.qty}',
+                                      style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold)),
+                                  IconButton(
+                                    icon: const Icon(Icons.add_circle_outline),
+                                    onPressed: () => setState(() =>
+                                        CartState.changeQty(
+                                            item.product.id, 1)),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, -2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      _SummaryRow(label: 'Subtotal', value: CartState.subtotal),
+                      _SummaryRow(label: 'Tax (7%)', value: CartState.tax),
+                      const Divider(height: 24),
+                      _SummaryRow(
+                          label: 'Total', value: CartState.total, bold: true),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const CustomerInfoPage()),
+                            ).then((_) => setState(() {}));
+                          },
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            backgroundColor: const Color(0xFFE91E63),
+                          ),
+                          child: const Text('Continue',
+                              style: TextStyle(fontSize: 16)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+// Page 3: Customer Information Form
+class CustomerInfoPage extends StatefulWidget {
+  const CustomerInfoPage({super.key});
+
+  @override
+  State<CustomerInfoPage> createState() => _CustomerInfoPageState();
+}
+
+class _CustomerInfoPageState extends State<CustomerInfoPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _provinceController = TextEditingController();
+  final _districtController = TextEditingController();
+  final _villageController = TextEditingController();
+  String _memberType = 'ລາງະສູດ';
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _provinceController.dispose();
+    _districtController.dispose();
+    _villageController.dispose();
+    super.dispose();
+  }
+
+  void _continue() {
+    if (_formKey.currentState!.validate()) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const PaymentPage()),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFE91E63), Color(0xFF9C27B0)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        foregroundColor: Colors.white,
+        title: const Text('ຂໍ້ມູນລູກຄ້າ'),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'ຊື່ ແລະ ນາມສະກຸນ',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  hintText: 'ຊື່',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'ເບີໂທລະສັບ (ທີ່ປົວ 020, 030) *',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _phoneController,
+                decoration: const InputDecoration(
+                  hintText: '000-000-000',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.phone,
+                validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'ແຂວງ',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  hintText: '--ເລືອກ--',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'ວຽງຈັນ', child: Text('ວຽງຈັນ')),
+                  DropdownMenuItem(
+                      value: 'ຫຼວງພະບາງ', child: Text('ຫຼວງພະບາງ')),
+                  DropdownMenuItem(
+                      value: 'ສະຫວັນນະເຂດ', child: Text('ສະຫວັນນະເຂດ')),
+                ],
+                onChanged: (v) {},
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'ເມືອງ',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  hintText: '--ເລືອກ--',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                      value: 'ໄກສອນພອມວິຫານ', child: Text('ໄກສອນພອມວິຫານ')),
+                ],
+                onChanged: (v) {},
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'ບ້ານ',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _villageController,
+                decoration: const InputDecoration(
+                  hintText: 'ບ້ານ',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'ບັນຊີລັດຍົນຕູ່',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  hintText: '--ເລືອກ--',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'None', child: Text('None')),
+                ],
+                onChanged: (v) {},
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'ລາງະສູດລາງະລາງພນາເທັດ',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: RadioListTile<String>(
+                      title: const Text('ລາງະສູດ'),
+                      value: 'ລາງະສູດ',
+                      groupValue: _memberType,
+                      onChanged: (v) => setState(() => _memberType = v!),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  Expanded(
+                    child: RadioListTile<String>(
+                      title: const Text('Affiliate'),
+                      value: 'Affiliate',
+                      groupValue: _memberType,
+                      onChanged: (v) => setState(() => _memberType = v!),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
+              ),
+              if (_memberType == 'Affiliate') ...[
+                const SizedBox(height: 8),
+                TextFormField(
+                  decoration: const InputDecoration(
+                    labelText: 'ບ້ອນ Affiliate ເລືອກເພື່ອລະພະ',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _continue,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: Colors.purple[700],
+                  ),
+                  child: const Text('ຈັບປຽນການຊື້',
+                      style: TextStyle(fontSize: 16)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Page 4: Payment Confirmation
+class PaymentPage extends StatefulWidget {
+  const PaymentPage({super.key});
+
+  @override
+  State<PaymentPage> createState() => _PaymentPageState();
+}
+
+class _PaymentPageState extends State<PaymentPage> {
+  String _paymentMethod = 'Cash';
+  bool _processing = false;
+  String? _redirectURL;
+
+  // TODO: Replace with your actual PhaJay API Secret Key
+  static const String PAYMENT_API_KEY = '$2b$10$sRx/uTHMydWDIdizURcgxecjFPbvnUNFzOwTl3lxNyV35zoFY4HnO';
+
+  Future<void> _confirmPayment() async {
+    setState(() => _processing = true);
+
+    try {
+      // Generate unique order number (recommended by PhaJay)
+      final orderNo = 'ORDER${DateTime.now().millisecondsSinceEpoch}';
+      
+      // Build cart items description
+      final itemsList = CartState.cart.values
+          .map((item) => '${item.product.name} x${item.qty}')
+          .join(', ');
+      
+      final description = 'Purchase: $itemsList';
+      
+      print('Creating payment for order: $orderNo');
+      
+      // Call PhaJay Payment Gateway API
+      final paymentResponse = await ApiService.createPaymentLink(
+        amount: CartState.total,
+        orderNo: orderNo,
+        description: description,
+        apiKey: PAYMENT_API_KEY,
+        tag1: '4B-SHOP', // Shop identifier
+        tag2: 'POS-APP', // Source identifier
+        tag3: DateTime.now().toIso8601String(), // Timestamp
+      );
+
+      print('Payment Response: $paymentResponse');
+      
+      // Extract redirectURL from response (PhaJay returns 'redirectURL')
+      final redirectURL = paymentResponse['redirectURL'];
+      final returnedOrderNo = paymentResponse['orderNo'];
+
+      if (redirectURL != null && redirectURL.isNotEmpty) {
+        setState(() {
+          _redirectURL = redirectURL;
+          _processing = false;
+        });
+
+        // Save pending order locally
+        final prefs = await SharedPreferences.getInstance();
+        final list = prefs.getStringList('pending_orders') ?? [];
+        list.add('$returnedOrderNo|${DateTime.now().toIso8601String()}|${CartState.total}');
+        await prefs.setStringList('pending_orders', list);
+
+        // Show payment link dialog with option to open
+        _showPaymentLinkDialog(redirectURL, returnedOrderNo ?? orderNo);
+      } else {
+        throw Exception('redirectURL not received from payment gateway');
+      }
+    } catch (e) {
+      setState(() => _processing = false);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showPaymentLinkDialog(String redirectURL, String orderNo) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.payment, color: Colors.pink[700]),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('PhaJay Payment')),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.pink[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Order: $orderNo',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Amount: ₭ ${CartState.total.toStringAsFixed(0)} LAK',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFE91E63),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Supported Banks:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(height: 8),
+              _buildBankRow('BCEL', 'Banque pour le Commerce Extérieur Lao'),
+              _buildBankRow('JDB', 'Joint Development Bank'),
+              _buildBankRow('LDB', 'Lao Development Bank'),
+              _buildBankRow('IB', 'Indochina Bank'),
+              const SizedBox(height: 16),
+              const Text(
+                'Payment Link:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: SelectableText(
+                  redirectURL,
+                  style: const TextStyle(fontSize: 10, color: Colors.blue),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 16, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Open this link in your mobile banking app to complete payment',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              // Clear cart after creating payment
+              CartState.clear();
+              
+              if (mounted) {
+                Navigator.of(context).pop(); // Close dialog
+                Navigator.of(context).popUntil((route) => route.isFirst); // Go to home
+                
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Payment link created!\nOrder: $orderNo\nPlease complete payment via the link.'),
+                    backgroundColor: Colors.green,
+                    duration: const Duration(seconds: 5),
+                  ),
+                );
+                
+                print('📱 Payment URL: $redirectURL');
+              }
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFE91E63),
+            ),
+            icon: const Icon(Icons.check_circle),
+            label: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBankRow(String code, String name) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.green[700],
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              code,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              name,
+              style: const TextStyle(fontSize: 11),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFE91E63), Color(0xFF9C27B0)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        foregroundColor: Colors.white,
+        title: const Text('Payment'),
+      ),
+      body: _processing
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Order Summary',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: CartState.cart.values.map((item) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                      '${item.product.name} x${item.qty}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis),
+                                ),
+                                Text('₭ ${item.lineTotal.toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w500)),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text('Payment Method',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  Card(
+                    child: Column(
+                      children: [
+                        RadioListTile<String>(
+                          title: const Text('Cash'),
+                          value: 'Cash',
+                          groupValue: _paymentMethod,
+                          onChanged: (v) => setState(() => _paymentMethod = v!),
+                        ),
+                        RadioListTile<String>(
+                          title: const Text('Card'),
+                          value: 'Card',
+                          groupValue: _paymentMethod,
+                          onChanged: (v) => setState(() => _paymentMethod = v!),
+                        ),
+                        RadioListTile<String>(
+                          title: const Text('Mobile Payment'),
+                          value: 'Mobile',
+                          groupValue: _paymentMethod,
+                          onChanged: (v) => setState(() => _paymentMethod = v!),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Card(
+                    color: Colors.pink.shade50,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
+                          _SummaryRow(
+                              label: 'Subtotal', value: CartState.subtotal),
+                          const SizedBox(height: 8),
+                          _SummaryRow(label: 'Tax (7%)', value: CartState.tax),
+                          const Divider(height: 24),
+                          _SummaryRow(
+                              label: 'Total Amount',
+                              value: CartState.total,
+                              bold: true,
+                              large: true),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _confirmPayment,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: const Color(0xFFE91E63),
+                      ),
+                      icon: const Icon(Icons.check_circle),
+                      label: const Text('Confirm Payment',
+                          style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  final String label;
+  final double value;
+  final bool bold;
+  final bool large;
+  const _SummaryRow(
+      {required this.label,
+      required this.value,
+      this.bold = false,
+      this.large = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(
+      fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+      fontSize: large ? 18 : 14,
+    );
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: style),
+        Text('₭ ${value.toStringAsFixed(0)}', style: style),
+      ],
+    );
+  }
+}
