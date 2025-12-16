@@ -1,4 +1,27 @@
+// CUSTOMER INFO PAGE - CURRENTLY DISABLED
+// This page is skipped in the payment flow. Customer info is not collected.
+// To re-enable: Uncomment this entire file and update cart_page.dart navigation
+
 import 'package:flutter/material.dart';
+
+// Empty placeholder class to prevent import errors
+class CustomerInfoPage extends StatelessWidget {
+  const CustomerInfoPage({super.key});
+  
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: Text('This page is currently disabled'),
+      ),
+    );
+  }
+}
+
+/*
+// ORIGINAL CODE - COMMENTED OUT
+// Uncomment below to re-enable customer info page
+
 import 'package:shared_preferences/shared_preferences.dart';
 import '../state/cart_state.dart';
 import '../services/api_service.dart';
@@ -316,3 +339,4 @@ class _CustomerInfoPageState extends State<CustomerInfoPage> {
     );
   }
 }
+*/

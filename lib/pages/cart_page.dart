@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../state/cart_state.dart';
-import 'customer_info_page.dart';
+// import 'customer_info_page.dart'; // Commented out - skip customer info
+import 'bank_selection_page.dart';
 
 // Helper widget for summary rows
 class SummaryRow extends StatelessWidget {
@@ -40,6 +41,22 @@ class CartPage extends StatefulWidget {
 }
 
 class _CartPageState extends State<CartPage> {
+  static const String SECRET_KEY =
+      '\$2b\$10\$sRx/uTHMydWDIdizURcgxecjFPbvnUNFzOwTl3lxNyV35zoFY4HnO';
+
+  void _proceedToPayment() {
+    // Navigate to bank selection page
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BankSelectionPage(
+          amount: CartState.total,
+          secretKey: SECRET_KEY,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -169,21 +186,21 @@ class _CartPageState extends State<CartPage> {
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const CustomerInfoPage()),
-                            ).then((_) => setState(() {}));
-                          },
+                          onPressed: _proceedToPayment,
                           style: FilledButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             backgroundColor: const Color(0xFFE91E63),
                           ),
-                          child: const Text('Continue',
+                          child: const Text('Proceed to Payment',
                               style: TextStyle(fontSize: 16)),
                         ),
                       ),
+                      // Skip customer info page:
+                      // Navigator.push(
+                      //   context,
+                      //   MaterialPageRoute(
+                      //       builder: (_) => const CustomerInfoPage()),
+                      // ).then((_) => setState(() {}));
                     ],
                   ),
                 ),

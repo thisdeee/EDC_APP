@@ -4,6 +4,49 @@ import 'package:http/http.dart' as http;
 import '../models/product.dart';
 
 class ApiService {
+
+    // PhaJay Credit Card Payment
+    static Future<Map<String, dynamic>> createCreditCardPayment({
+      required double amount,
+      required String description,
+      required String secretKey,
+      String? tag1,
+      String? tag2,
+      String? tag3,
+    }) async {
+      const endpoint = 'https://payment-gateway.phajay.co/v1/api/jdb2c2p/payment/payment-link';
+      final requestBody = {
+        'amount': amount,
+        'description': description,
+        if (tag1 != null) 'tag1': tag1,
+        if (tag2 != null) 'tag2': tag2,
+        if (tag3 != null) 'tag3': tag3,
+      };
+      final auth = base64Encode(utf8.encode(secretKey));
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Basic $auth',
+      };
+      try {
+        final response = await http.post(
+          Uri.parse(endpoint),
+          headers: headers,
+          body: json.encode(requestBody),
+        ).timeout(const Duration(seconds: 30));
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final data = json.decode(response.body);
+          if (data['paymentUrl'] != null) {
+            return data;
+          } else {
+            throw Exception('No paymentUrl in response: $data');
+          }
+        } else {
+          throw Exception('HTTP ${response.statusCode}: ${response.body}');
+        }
+      } catch (e) {
+        rethrow;
+      }
+    }
   static const String baseUrl = 'https://api.bbbb.com.la';
 
   // Send GraphQL request using http package
@@ -135,35 +178,62 @@ class ApiService {
     }
   }
 
-  // Payment Gateway API - PhaJay BCEL QR Payment
+  // Payment Gateway API - PhaJay Multi-Bank QR Payment
   static Future<Map<String, dynamic>> createQRPayment({
     required double amount,
     required String description,
     required String secretKey,
+    String bankCode = 'jdb', // Default to JDB
   }) async {
     try {
       print('========== PHAJAY QR PAYMENT REQUEST ==========');
+      print('Bank: ${bankCode.toUpperCase()}');
       print('Amount: $amount LAK');
       print('Description: $description');
 
-      // Build request body - BCEL does not support Lao/Thai characters in description
+      // Determine API endpoint based on bank code
+      String endpoint;
+      switch (bankCode.toLowerCase()) {
+        case 'ldb':
+          endpoint =
+              'https://payment-gateway.phajay.co/v1/api/payment/generate-ldb-qr';
+          break;
+        case 'bcel':
+          endpoint =
+              'https://payment-gateway.phajay.co/v1/api/payment/generate-bcel-qr';
+          break;
+        case 'ib':
+          endpoint =
+              'https://payment-gateway.phajay.co/v1/api/payment/generate-ib-qr';
+          break;
+        case 'jdb':
+        default:
+          endpoint =
+              'https://payment-gateway.phajay.co/v1/api/payment/generate-jdb-qr';
+          break;
+      }
+
+      // Build request body
       final requestBody = {
         'amount': amount,
-        'description': description, 
+        'description': description,
         'tag2': "Jop Jip",
         'tag1': "6864d7d2f32c2508f58eb7e8",
       };
-      
+
+      print('Endpoint: $endpoint');
       print('Request body: $requestBody');
-      
-      final response = await http.post(
-        Uri.parse('https://payment-gateway.phajay.co/v1/api/payment/generate-jdb-qr'),
+
+      final response = await http
+          .post(
+        Uri.parse(endpoint),
         headers: {
           'secretKey': secretKey, // Use testKey if not KYC
           'Content-Type': 'application/json',
         },
         body: json.encode(requestBody),
-      ).timeout(
+      )
+          .timeout(
         const Duration(seconds: 30),
         onTimeout: () {
           throw TimeoutException('Payment gateway timeout after 30 seconds');
@@ -176,7 +246,7 @@ class ApiService {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = json.decode(response.body);
-        
+
         // Check for successful response
         if (data['message'] == 'SUCCESSFULLY' && data['qrCode'] != null) {
           print('✅ QR Payment created successfully');

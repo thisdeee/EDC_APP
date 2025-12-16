@@ -263,6 +263,19 @@ class _ProductListPageState extends State<ProductListPage> {
       return matchesQuery && matchesStock;
     }).toList();
 
+    // Sort products: in-stock items first, then out-of-stock
+    filtered.sort((a, b) {
+      final aInStock = (a.isUsingSalePage == true && (a.stock ?? 0) > 0);
+      final bInStock = (b.isUsingSalePage == true && (b.stock ?? 0) > 0);
+      
+      // If one is in stock and the other isn't, prioritize in-stock
+      if (aInStock && !bInStock) return -1;
+      if (!aInStock && bInStock) return 1;
+      
+      // If both have same stock status, maintain original order
+      return 0;
+    });
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(

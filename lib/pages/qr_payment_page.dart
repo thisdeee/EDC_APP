@@ -14,6 +14,7 @@ class QRPaymentPage extends StatefulWidget {
   final String secretKey;
   final String customerName;
   final String customerPhone;
+  final String bankName;
   
   const QRPaymentPage({
     super.key,
@@ -24,6 +25,7 @@ class QRPaymentPage extends StatefulWidget {
     required this.customerName,
     required this.customerPhone,
     this.link,
+    this.bankName = 'JDB',
   });
   
   @override
@@ -187,7 +189,7 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
           ),
         ),
         foregroundColor: Colors.white,
-        title: const Text('BCEL QR Payment'),
+        title: Text('${widget.bankName} Payment'),
         leading: _paymentCompleted
             ? null
             : IconButton(
@@ -217,162 +219,310 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
               ),
       ),
       body: _paymentCompleted
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.check_circle, color: Colors.green, size: 80),
-                  SizedBox(height: 16),
-                  Text(
-                    'Payment Confirmed!',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 8),
-                  Text('Returning to home...'),
-                ],
+          ? Center(
+              child: Container(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.check_circle,
+                        color: Colors.green.shade600,
+                        size: 80,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Payment Successful!',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Processing your order...',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Transaction Info Card
-                  Card(
-                    elevation: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
+          : Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.grey.shade50,
+                    Colors.white,
+                  ],
+                ),
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Amount Card - Compact with Logos
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF1E88E5), Color(0xFF1565C0)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.blue.shade200.withOpacity(0.5),
+                            blurRadius: 12,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
+                          // Row 1: Logos with text below
+                          Column(
                             children: [
-                              const Icon(Icons.receipt_long, color: Colors.purple),
-                              const SizedBox(width: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Image.network(
+                                      'https://image2url.com/images/1765170299091-f08fcf1b-f4a4-4be1-ba43-b38df770e8dc.png',
+                                      width: 70,
+                                      height: 40,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return const Text(
+                                          'JDB',
+                                          style: TextStyle(
+                                            color: Color(0xFF1E88E5),
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Container(
+                                    padding: const EdgeInsets.all(5),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Image.network(
+                                      'https://image2url.com/images/1765170407629-426827dc-9051-4e21-993e-07892c94829c.png',
+                                      width: 80,
+                                      height: 50,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return const Text(
+                                          'PHAJAY',
+                                          style: TextStyle(
+                                            color: Color(0xFF1E88E5),
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              
+                            ],
+                          ),
+                          
+                          // Divider Line
+                          const SizedBox(height: 8),
+                          Container(
+                            height: 1,
+                            color: Colors.white30,
+                          ),
+                          const SizedBox(height: 8),
+                          
+                          // Row 2: Amount to Pay
+                          Column(
+                            children: [
                               const Text(
-                                'Transaction Details',
+                                'Amount to Pay',
                                 style: TextStyle(
-                                  fontSize: 18,
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${widget.amount.toStringAsFixed(0)} ₭',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 28,
                                   fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.0,
+                                ),
+                              ),
+                              Text(
+                                '#${widget.transactionId.substring(0, 8).toUpperCase()}',
+                                style: const TextStyle(
+                                  color: Colors.white60,
+                                  fontSize: 9,
                                 ),
                               ),
                             ],
                           ),
-                          const Divider(height: 24),
-                          _buildInfoRow('Transaction ID', widget.transactionId),
-                          const SizedBox(height: 8),
-                          _buildInfoRow('Amount', '${widget.amount.toStringAsFixed(0)} LAK'),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  
-                  // QR Code Display
-                  Card(
-                    elevation: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // QR Code Card - Compact Design
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.shade300,
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
                       child: Column(
                         children: [
                           const Text(
-                            'Scan QR Code to Pay',
+                            'Scan to Pay',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Use PhaJay or JDB Digital',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade600,
                             ),
                           ),
                           const SizedBox(height: 16),
                           
-                          // QR Code Container
+                          // QR Code with clean border
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.shade300),
+                              border: Border.all(
+                                color: Colors.grey.shade200,
+                                width: 2,
+                              ),
                             ),
                             child: QrImageView(
                               data: widget.qrCode,
                               version: QrVersions.auto,
-                              size: 250.0,
+                              size: 220.0,
                               backgroundColor: Colors.white,
+                              eyeStyle: const QrEyeStyle(
+                                eyeShape: QrEyeShape.square,
+                                color: Colors.black,
+                              ),
+                              dataModuleStyle: const QrDataModuleStyle(
+                                dataModuleShape: QrDataModuleShape.square,
+                                color: Colors.black,
+                              ),
                             ),
                           ),
+                          
                           const SizedBox(height: 16),
                           
-                          // Copy QR Code Button
+                          // Copy QR Button
                           OutlinedButton.icon(
                             onPressed: _copyQRCode,
-                            icon: const Icon(Icons.copy),
+                            icon: const Icon(Icons.copy, size: 18),
                             label: const Text('Copy QR Code'),
                             style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF1E88E5),
+                              side: const BorderSide(color: Color(0xFF1E88E5)),
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
+                                horizontal: 32,
                                 vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // Instructions
-                  Card(
-                    color: Colors.blue.shade50,
-                    child: Padding(
+                    
+                    const SizedBox(height: 28),
+                    
+                    // Status Indicator
+                    Container(
                       padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.blue.shade100,
+                        ),
+                      ),
+                      child: Row(
                         children: [
-                          Row(
-                            children: [
-                              Icon(Icons.info_outline, color: Colors.blue.shade700),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Payment Instructions',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue.shade700,
-                                ),
+                          SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.blue.shade700,
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          _buildInstruction('1. Open your JDB app'),
-                          _buildInstruction('2. Scan the QR code above'),
-                          _buildInstruction('3. Confirm the payment amount'),
-                          _buildInstruction('4. Complete the transaction'),
-                          const SizedBox(height: 16),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.blue.shade200),
                             ),
-                            child: Row(
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade700),
+                                Text(
+                                  _paymentStatus,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: Colors.blue.shade900,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    _paymentStatus,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.blue.shade700,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Payment will be confirmed automatically',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.blue.shade700,
                                   ),
                                 ),
                               ],
@@ -381,9 +531,47 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                         ],
                       ),
                     ),
-                  ),
-                  
-                  const SizedBox(height: 16),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Instructions
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                color: Colors.grey.shade700,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'How to Pay',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: Colors.grey.shade800,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          _buildInstructionStep('1', 'Open your banking app'),
+                          _buildInstructionStep('2', 'Select QR Payment'),
+                          _buildInstructionStep('3', 'Scan the code above'),
+                          _buildInstructionStep('4', 'Confirm the amount'),
+                        ],
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 16),
                   
                   // Debug: Test Payment Button (uncomment to show test button)
                   // if (kDebugMode)
@@ -415,6 +603,7 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                 ],
               ),
             ),
+      ),
     );
   }
 
@@ -440,17 +629,38 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
     );
   }
 
-  Widget _buildInstruction(String text) {
+  Widget _buildInstructionStep(String number, String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(width: 8),
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E88E5),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: Text(
+                number,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(fontSize: 14),
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade800,
+                height: 1.4,
+              ),
             ),
           ),
         ],
