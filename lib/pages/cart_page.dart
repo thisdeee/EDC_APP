@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../state/cart_state.dart';
-// import 'customer_info_page.dart'; // Commented out - skip customer info
 import 'bank_selection_page.dart';
+import 'qr_payment_page.dart';
+import 'payment_success_page.dart';
+import 'payment_webview_page.dart';
+import '../services/api_service.dart';
 
 // Helper widget for summary rows
 class SummaryRow extends StatelessWidget {
@@ -44,17 +47,90 @@ class _CartPageState extends State<CartPage> {
   static const String SECRET_KEY =
       '\$2b\$10\$sRx/uTHMydWDIdizURcgxecjFPbvnUNFzOwTl3lxNyV35zoFY4HnO';
 
-  void _proceedToPayment() {
-    // Navigate to bank selection page
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => BankSelectionPage(
+  void _proceedToPayment() async {
+    // Generate QR payment without creating order
+    try {
+      // Generate transaction ID
+      final transactionId = 'TXN_${DateTime.now().millisecondsSinceEpoch}';
+
+      // Create order first
+      final orderResult = await ApiService.createOrderGroup(
+        shop: '6864d7d2f32c2508f58eb7e8',
+        type: 'POS',
+        amount: CartState.cart.values.fold(0, (sum, item) => sum + item.qty),
+        sumPrice: CartState.total.toInt(),
+        sumPriceBaht: 0,
+        sumPriceUsd: 0,
+        totalPrice: CartState.total.toInt(),
+        customerName: 'Walk-in Customer',
+        phone: 'N/A',
+        logistic: '',
+        destinationLogistic: '',
+        affiliateName: '',
+        orders: CartState.cart.keys.first, // Use first product ID
+      );
+
+      if (orderResult != null && mounted) {
+        final orderId = orderResult['id']; // Extract order ID
+
+        // Then create QR payment
+        final paymentResult = await ApiService.createQRPayment(
           amount: CartState.total,
+          description: 'Payment for transaction $transactionId',
           secretKey: SECRET_KEY,
-        ),
-      ),
-    );
+          bankCode: 'jdb', // Default bank
+        );
+
+        if (paymentResult != null && paymentResult['qrCode'] != null && mounted) {
+          final qrCode = paymentResult['qrCode'];
+          final link = paymentResult['link'] ?? '';
+
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => QRPaymentPage(
+                qrCode: qrCode,
+                transactionId: transactionId,
+                amount: CartState.total,
+                secretKey: SECRET_KEY,
+                link: link,
+                customerName: 'Walk-in Customer',
+                customerPhone: 'N/A',
+                bankName: 'JDB',
+                orderGroupId: orderId, // เพิ่ม orderGroupId
+              ),
+            ),
+          );
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Failed to generate QR payment'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to create order'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -71,10 +147,10 @@ class _CartPageState extends State<CartPage> {
           ),
         ),
         foregroundColor: Colors.white,
-        title: const Text('Cart'),
+        title: const Text('ກະຕ່າສິນຄ້າ'),
       ),
       body: CartState.cart.isEmpty
-          ? const Center(child: Text('No items in cart'))
+          ? const Center(child: Text('ບໍ່ມີສິນຄ້າໃນກະຕ່າ'))
           : Column(
               children: [
                 Expanded(
@@ -177,11 +253,11 @@ class _CartPageState extends State<CartPage> {
                   ),
                   child: Column(
                     children: [
-                      SummaryRow(label: 'Subtotal', value: CartState.total),
-                      SummaryRow(label: 'Tax (0%)', value: 0),
+                      SummaryRow(label: 'ລາຄາ', value: CartState.total),
+                      SummaryRow(label: 'ພາສີ (0%)', value: 0),
                       const Divider(height: 24),
                       SummaryRow(
-                          label: 'Total', value: CartState.total, bold: true),
+                          label: 'ລວມລາຄາ', value: CartState.total, bold: true),
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
@@ -191,7 +267,7 @@ class _CartPageState extends State<CartPage> {
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             backgroundColor: const Color(0xFFE91E63),
                           ),
-                          child: const Text('Proceed to Payment',
+                          child: const Text('ດໍາເນີນການຊໍາລະເງິນ',
                               style: TextStyle(fontSize: 16)),
                         ),
                       ),

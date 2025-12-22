@@ -115,13 +115,6 @@ class _BankSelectionPageState extends State<BankSelectionPage> {
 
   final List<Map<String, String>> banks = [
     {'name': 'JDB', 'logo': 'assets/images/jdb.png', 'code': 'jdb'},
-    {'name': 'LDB', 'logo': 'assets/images/ldb.png', 'code': 'ldb'},
-    {'name': 'BCEL', 'logo': 'assets/images/bcel.png', 'code': 'bcel'},
-    {
-      'name': 'Indochina Bank',
-      'logo': 'assets/images/indochina.png',
-      'code': 'ib'
-    },
   ];
 
   Future<void> _selectBank(String bankCode, String bankName) async {
@@ -247,7 +240,7 @@ class _BankSelectionPageState extends State<BankSelectionPage> {
         ),
         child: Column(
           children: [
-            const Text('Amount to Pay',
+            const Text('ຈຳນວນເງິນທີ່ຕ້ອງຊໍາລະ',
                 style: TextStyle(color: Colors.white70)),
             Text('${widget.amount.toStringAsFixed(0)} ₭',
                 style: const TextStyle(

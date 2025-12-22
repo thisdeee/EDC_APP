@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:async';
+import 'dart:convert';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../state/cart_state.dart';
+import '../services/api_service.dart';
+import '../models/product.dart';
 import 'payment_success_page.dart';
 
 class QRPaymentPage extends StatefulWidget {
@@ -15,6 +20,7 @@ class QRPaymentPage extends StatefulWidget {
   final String customerName;
   final String customerPhone;
   final String bankName;
+  final String? orderGroupId; // เพิ่ม orderGroupId
   
   const QRPaymentPage({
     super.key,
@@ -26,6 +32,7 @@ class QRPaymentPage extends StatefulWidget {
     required this.customerPhone,
     this.link,
     this.bankName = 'JDB',
+    this.orderGroupId, // เพิ่มพารามิเตอร์นี้
   });
   
   @override
@@ -48,9 +55,9 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
     print('=== CONNECTING TO PHAJAY SOCKET ===');
     print('Secret Key: ${widget.secretKey}');
     print('Transaction ID: ${widget.transactionId}');
+    print('Order Group ID: ${widget.orderGroupId}');
     
     try {
-      // According to PhaJay documentation
       const String socketUrl = 'https://payment-gateway.phajay.co/';
       
       print('🔌 Socket URL: $socketUrl');
@@ -71,7 +78,6 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
         });
       });
 
-      // Listen to the correct event format: "join::{SECRET_KEY}"
       final eventName = 'join::${widget.secretKey}';
       print('📡 Subscribing to event: $eventName');
       
@@ -87,7 +93,6 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
         }
       });
 
-      // Listen to all events for debugging
       _socket!.onAny((event, data) {
         print('📡 Socket event received: $event');
         print('📡 Event data: $data');
@@ -118,7 +123,6 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
     }
     
     try {
-      // Payment callback received means payment is successful
       print('✅ Payment completed successfully!');
       setState(() {
         _paymentData = data;
@@ -147,32 +151,102 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
 
   void _confirmPayment() {
     if (_paymentCompleted) return;
-    
     setState(() => _paymentCompleted = true);
-    
-    // Save cart items before clearing
+
     final cartItems = CartState.cart.values.toList();
-    
-    // Clear cart
-    CartState.clear();
-    
-    // Disconnect socket
     _socket?.dispose();
-    
-    // Navigate to success page (shows for 2 seconds then goes to receipt)
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => PaymentSuccessPage(
-            transactionId: widget.transactionId,
-            amount: widget.amount,
-            paymentData: _paymentData ?? {},
-            customerName: widget.customerName,
-            cartItems: cartItems,
+
+    Future.microtask(() async {
+      try {
+        print('🔄 ========== STARTING POST-PAYMENT PROCESS ==========');
+        
+        // ========== ขั้นตอนที่ 1: อัปเดตสต็อก ==========
+        print('📦 Step 1: Updating stock...');
+        for (final item in cartItems) {
+          try {
+            await ApiService.updateStock(item.product.id, item.qty);
+            print('✅ Updated stock for ${item.product.name}: -${item.qty}');
+          } catch (stockError) {
+            print('❌ Failed to update stock for ${item.product.name}: $stockError');
+          }
+        }
+        print('✅ Stock updates completed');
+
+        // ========== ขั้นตอนที่ 2: อัปเดตสถานะออเดอร์ ==========
+        if (widget.orderGroupId != null) {
+          print('📝 Step 2: Updating order status...');
+          print('Order Group ID: ${widget.orderGroupId}');
+          
+          try {
+            // ดึงข้อมูล payment จาก callback
+            final paymentMethod = _paymentData?['paymentMethod']?.toString() ?? widget.bankName;
+            final sourceName = _paymentData?['sourceName']?.toString() ?? 'QR Payment';
+            
+            print('💳 Payment details:');
+            print('  Payment Method: $paymentMethod');
+            print('  Source: $sourceName');
+            
+            final updateResult = await ApiService.updateOrderStatus(
+              orderId: widget.orderGroupId!,
+              status: 'COMPLETED',
+              payment: 'TRANSFER',
+              paymentMethod: paymentMethod,
+              isPaymented: true,
+            );
+            
+            print('✅ Order status updated successfully!');
+            print('📋 Updated Order Details:');
+            print('  ID: ${updateResult?['id']}');
+            print('  Status: ${updateResult?['status']}');
+            print('  Payment: ${updateResult?['payment']}');
+            print('  Payment Method: ${updateResult?['paymentMethod']}');
+            print('  Is Paymented: ${updateResult?['isPaymented']}');
+            print('  Updated At: ${updateResult?['updatedAt']}');
+          } catch (orderError) {
+            print('❌ Failed to update order status: $orderError');
+            // ไม่ throw error เพื่อให้ process ดำเนินต่อไป
+          }
+        } else {
+          print('⚠️ No orderGroupId provided, skipping order status update');
+        }
+
+        print('✅ ========== POST-PAYMENT PROCESS COMPLETED ==========');
+        
+        // Clear cart
+        CartState.clear();
+
+        if (!mounted) return;
+
+        // Navigate to success page
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => PaymentSuccessPage(
+              transactionId: widget.transactionId,
+              amount: widget.amount,
+              paymentData: _paymentData ?? {},
+              customerName: widget.customerName,
+              cartItems: cartItems,
+            ),
           ),
-        ),
-      );
-    }
+        );
+      } catch (e) {
+        print('❌ Unexpected error in payment confirmation: $e');
+        // ยังคง clear cart และ navigate ต่อไป
+        CartState.clear();
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => PaymentSuccessPage(
+              transactionId: widget.transactionId,
+              amount: widget.amount,
+              paymentData: _paymentData ?? {},
+              customerName: widget.customerName,
+              cartItems: cartItems,
+            ),
+          ),
+        );
+      }
+    });
   }
 
   @override
@@ -254,6 +328,14 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                         color: Colors.grey.shade600,
                       ),
                     ),
+                    const SizedBox(height: 24),
+                    Column(
+                      children: [
+                        _buildProcessStep('Updating stock', true),
+                        _buildProcessStep('Updating order status', true),
+                        _buildProcessStep('Finalizing...', false),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -274,7 +356,6 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Amount Card - Compact with Logos
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -295,7 +376,6 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                       ),
                       child: Column(
                         children: [
-                          // Row 1: Logos with text below
                           Column(
                             children: [
                               Row(
@@ -348,11 +428,9 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                                   ),
                                 ],
                               ),
-                              
                             ],
                           ),
                           
-                          // Divider Line
                           const SizedBox(height: 8),
                           Container(
                             height: 1,
@@ -360,7 +438,6 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                           ),
                           const SizedBox(height: 8),
                           
-                          // Row 2: Amount to Pay
                           Column(
                             children: [
                               const Text(
@@ -396,7 +473,6 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                     
                     const SizedBox(height: 16),
                     
-                    // QR Code Card - Compact Design
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -430,7 +506,6 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                           ),
                           const SizedBox(height: 16),
                           
-                          // QR Code with clean border
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
@@ -459,7 +534,6 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                           
                           const SizedBox(height: 16),
                           
-                          // Copy QR Button
                           OutlinedButton.icon(
                             onPressed: _copyQRCode,
                             icon: const Icon(Icons.copy, size: 18),
@@ -482,7 +556,6 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                     
                     const SizedBox(height: 28),
                     
-                    // Status Indicator
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -534,7 +607,6 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                     
                     const SizedBox(height: 24),
                     
-                    // Instructions
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -572,34 +644,6 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                     ),
                     
                     const SizedBox(height: 16),
-                  
-                  // Debug: Test Payment Button (uncomment to show test button)
-                  // if (kDebugMode)
-                  //   ElevatedButton.icon(
-                  //     onPressed: () {
-                  //       print('🧪 Testing payment callback manually');
-                  //       final testData = {
-                  //         'billNumber': widget.transactionId,
-                  //         'transactionId': widget.transactionId,
-                  //         'txnAmount': widget.amount,
-                  //         'merchantName': 'Jop Jip',
-                  //         'paymentMethod': 'JDB',
-                  //         'status': 'PAYMENT_COMPLETED',
-                  //         'txnDateTime': '${DateTime.now().day.toString().padLeft(2, '0')}/${DateTime.now().month.toString().padLeft(2, '0')}/${DateTime.now().year} ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:${DateTime.now().second.toString().padLeft(2, '0')}',
-                  //         'sourceName': 'Test Payment',
-                  //         'sourceAccount': '1234567890',
-                  //         'refNo': 123456789,
-                  //       };
-                  //       _handlePaymentCallback(testData);
-                  //     },
-                  //     icon: const Icon(Icons.check_circle),
-                  //     label: const Text('Simulate Payment Success'),
-                  //     style: ElevatedButton.styleFrom(
-                  //       backgroundColor: Colors.orange,
-                  //       foregroundColor: Colors.white,
-                  //       padding: const EdgeInsets.symmetric(vertical: 16),
-                  //     ),
-                  //   ),
                 ],
               ),
             ),
@@ -607,25 +651,27 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.grey.shade700,
-            fontSize: 14,
+  Widget _buildProcessStep(String text, bool completed) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            completed ? Icons.check_circle : Icons.hourglass_empty,
+            color: completed ? Colors.green : Colors.orange,
+            size: 16,
           ),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade700,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

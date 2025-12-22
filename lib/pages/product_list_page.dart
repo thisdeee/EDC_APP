@@ -292,9 +292,9 @@ class _ProductListPageState extends State<ProductListPage> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('4B',
+            Text('Jop Jip',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            Text('+856 020 00000000', style: TextStyle(fontSize: 12)),
+            Text('+856 020 76837072', style: TextStyle(fontSize: 12)),
           ],
         ),
         actions: [
@@ -343,7 +343,7 @@ class _ProductListPageState extends State<ProductListPage> {
                     filled: true,
                     fillColor: Colors.white,
                     prefixIcon: const Icon(Icons.search),
-                    hintText: 'Search products...',
+                    hintText: 'ຄົ້ນຫາສິນຄ້າ...',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
@@ -360,32 +360,32 @@ class _ProductListPageState extends State<ProductListPage> {
                             fontSize: 16, fontWeight: FontWeight.bold)),
                     Row(
                       children: [
-                        DropdownButton<String>(
-                          value: _stockFilter,
-                          underline: const SizedBox(),
-                          items: [
-                            DropdownMenuItem(
-                                value: 'All', child: Text('All Stock')),
-                            DropdownMenuItem(
-                                value: 'In Stock', child: Text('In Stock')),
-                            DropdownMenuItem(
-                                value: 'Out of Stock',
-                                child: Text('Out of Stock')),
-                          ],
-                          onChanged: (v) =>
-                              setState(() => _stockFilter = v ?? 'All'),
-                        ),
-                        const SizedBox(width: 8),
-                        DropdownButton<String>(
-                          value: _category,
-                          underline: const SizedBox(),
-                          items: categories
-                              .map((c) =>
-                                  DropdownMenuItem(value: c, child: Text(c)))
-                              .toList(),
-                          onChanged: (v) =>
-                              setState(() => _category = v ?? 'All'),
-                        ),
+                        // DropdownButton<String>(
+                        //   value: _stockFilter,
+                        //   underline: const SizedBox(),
+                        //   items: [
+                        //     DropdownMenuItem(
+                        //         value: 'All', child: Text('All Stock')),
+                        //     DropdownMenuItem(
+                        //         value: 'In Stock', child: Text('In Stock')),
+                        //     DropdownMenuItem(
+                        //         value: 'Out of Stock',
+                        //         child: Text('Out of Stock')),
+                        //   ],
+                        //   onChanged: (v) =>
+                        //       setState(() => _stockFilter = v ?? 'All'),
+                        // ),
+                        // const SizedBox(width: 8),
+                        // DropdownButton<String>(
+                        //   value: _category,
+                        //   underline: const SizedBox(),
+                        //   items: categories
+                        //       .map((c) =>
+                        //           DropdownMenuItem(value: c, child: Text(c)))
+                        //       .toList(),
+                        //   onChanged: (v) =>
+                        //       setState(() => _category = v ?? 'All'),
+                        // ),
                       ],
                     ),
                   ],
