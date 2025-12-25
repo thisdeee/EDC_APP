@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/product.dart';
 
 class ApiService {
@@ -72,6 +73,58 @@ class ApiService {
 
   //   return response['data']['createPaymentLinkWithPhapay'];
   // }
+
+  // Login User
+  static Future<Map<String, dynamic>?> loginUser({
+    required String username,
+    required String password,
+  }) async {
+    const String mutation = '''
+      mutation LoginUser(\$where: LoginUserInput!) {
+        loginUser(where: \$where) {
+          accessToken
+          data {
+            id
+            username
+            role
+            shop {
+              id
+              name
+              phone
+            }
+          }
+        }
+      }
+    ''';
+
+    final variables = {
+      'where': {
+        'username': username,
+        'password': password,
+      }
+    };
+
+    print('📤 Sending login mutation...');
+    print('Variables: $variables');
+
+    final response = await _sendGraphQLRequest(
+      query: mutation,
+      variables: variables,
+    );
+
+    print('📥 GraphQL response: $response');
+
+    if (response.containsKey('errors')) {
+      throw Exception('GraphQL Error: \n' + response['errors'].toString());
+    }
+
+    final loginData = response['data']['loginUser'];
+    if (loginData != null) {
+      return loginData;
+    }
+
+    return null;
+  }
 
   // Create Order Group
   static Future<Map<String, dynamic>> createOrderGroup({
@@ -200,13 +253,26 @@ class ApiService {
     required String query,
     required Map<String, dynamic> variables,
   }) async {
+    // Get access token from SharedPreferences, fallback to static token
+    String authToken = GRAPHQL_JWT_TOKEN;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final accessToken = prefs.getString('accessToken');
+      if (accessToken != null && accessToken.isNotEmpty) {
+        authToken = accessToken;
+      }
+    } catch (e) {
+      // If SharedPreferences fails, use static token
+      print('⚠️ Could not load access token from SharedPreferences, using static token');
+    }
+
     final response = await http
         .post(
       Uri.parse(baseUrl),
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Authorization': '$GRAPHQL_JWT_TOKEN',
+        'Authorization': '$authToken',
       },
       body: json.encode({
         'query': query,

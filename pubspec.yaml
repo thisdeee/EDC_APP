@@ -41,6 +41,10 @@ dependencies:
   http: ^1.2.0
   qr_flutter: ^4.1.0
   socket_io_client: ^2.0.3+1
+  esc_pos_printer: ^4.1.0
+  esc_pos_utils: ^1.1.0
+  intl: ^0.19.0
+  uuid: ^4.0.0
 
   # For launching URLs (credit card payment on web)
   url_launcher: ^6.2.6

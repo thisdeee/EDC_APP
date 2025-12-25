@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 import '../state/cart_state.dart';
 import '../services/api_service.dart';
 import '../models/product.dart';
@@ -73,9 +74,9 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
         print('✅ Connected to PhaJay payment socket');
         print('📡 Socket ID: ${_socket!.id}');
         print('📡 Connected: ${_socket!.connected}');
-        setState(() {
-          _paymentStatus = 'Connected. Scan QR code to pay...';
-        });
+        // setState(() {
+        //   _paymentStatus = 'Connected. Scan QR code to pay...';
+        // });
       });
 
       final eventName = 'join::${widget.secretKey}';
@@ -272,19 +273,19 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                   showDialog(
                     context: context,
                     builder: (context) => AlertDialog(
-                      title: const Text('Cancel Payment?'),
-                      content: const Text('Are you sure you want to cancel this payment?'),
+                      title: const Text('ຍົກເລີກການໍຳລະ?'),
+                      content: const Text('ທ່ານຕ້ອງການຍົກເລີກການຊຳລະນີ້ບໍ?'),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(context),
-                          child: const Text('No'),
+                          child: const Text('ບໍ່ຍົກເລີກ'),
                         ),
                         TextButton(
                           onPressed: () {
                             Navigator.pop(context);
                             Navigator.pop(context);
                           },
-                          child: const Text('Yes'),
+                          child: const Text('ຍົກເລີກ'),
                         ),
                       ],
                     ),
@@ -356,119 +357,100 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF1E88E5), Color(0xFF1565C0)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                    Column(
+                      children: [
+                        Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Image.network(
+                                    'https://image2url.com/images/1765170299091-f08fcf1b-f4a4-4be1-ba43-b38df770e8dc.png',
+                                    width: 70,
+                                    height: 40,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return const Text(
+                                        'JDB',
+                                        style: TextStyle(
+                                          color: Color(0xFF1E88E5),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 2),
+                                Container(
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Image.network(
+                                    'https://image2url.com/images/1765170407629-426827dc-9051-4e21-993e-07892c94829c.png',
+                                    width: 80,
+                                    height: 50,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return const Text(
+                                        'PHAJAY',
+                                        style: TextStyle(
+                                          color: Color(0xFF1E88E5),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.blue.shade200.withOpacity(0.5),
-                            blurRadius: 12,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          Column(
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Image.network(
-                                      'https://image2url.com/images/1765170299091-f08fcf1b-f4a4-4be1-ba43-b38df770e8dc.png',
-                                      width: 70,
-                                      height: 40,
-                                      fit: BoxFit.contain,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return const Text(
-                                          'JDB',
-                                          style: TextStyle(
-                                            color: Color(0xFF1E88E5),
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 2),
-                                  Container(
-                                    padding: const EdgeInsets.all(5),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Image.network(
-                                      'https://image2url.com/images/1765170407629-426827dc-9051-4e21-993e-07892c94829c.png',
-                                      width: 80,
-                                      height: 50,
-                                      fit: BoxFit.contain,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return const Text(
-                                          'PHAJAY',
-                                          style: TextStyle(
-                                            color: Color(0xFF1E88E5),
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ],
+                        
+                        const SizedBox(height: 8),
+                        Container(
+                          height: 1,
+                          color: Colors.white30,
+                        ),
+                        const SizedBox(height: 8),
+                        
+                        Column(
+                          children: [
+                            const Text(
+                              'ຈຳນວນເງິນທີ່ຕ້ອງຊຳລະ',
+                              style: TextStyle(
+                                color: Color.fromARGB(179, 0, 0, 0),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
                               ),
-                            ],
-                          ),
-                          
-                          const SizedBox(height: 8),
-                          Container(
-                            height: 1,
-                            color: Colors.white30,
-                          ),
-                          const SizedBox(height: 8),
-                          
-                          Column(
-                            children: [
-                              const Text(
-                                'Amount to Pay',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${NumberFormat('#,##0').format(widget.amount.toInt())} ₭',
+                              style: const TextStyle(
+                                color: Color.fromARGB(255, 0, 0, 0),
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.0,
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '${widget.amount.toStringAsFixed(0)} ₭',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.0,
-                                ),
+                            ),
+                            Text(
+                              '#${widget.transactionId.substring(0, 8).toUpperCase()}',
+                              style: const TextStyle(
+                                color: Colors.white60,
+                                fontSize: 9,
                               ),
-                              Text(
-                                '#${widget.transactionId.substring(0, 8).toUpperCase()}',
-                                style: const TextStyle(
-                                  color: Colors.white60,
-                                  fontSize: 9,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                     
                     const SizedBox(height: 16),
@@ -489,7 +471,7 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                       child: Column(
                         children: [
                           const Text(
-                            'Scan to Pay',
+                            'ສະແກນເພື່ອຊຳລະເງິນ',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -497,14 +479,6 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            'Use PhaJay or JDB Digital',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
                           
                           Container(
                             padding: const EdgeInsets.all(16),
@@ -529,6 +503,10 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                                 dataModuleShape: QrDataModuleShape.square,
                                 color: Colors.black,
                               ),
+                              embeddedImage: NetworkImage('https://image2url.com/images/1765170299091-f08fcf1b-f4a4-4be1-ba43-b38df770e8dc.png'),
+                              embeddedImageStyle: QrEmbeddedImageStyle(
+                                size: Size(30, 30),
+                              ),
                             ),
                           ),
                           
@@ -537,7 +515,7 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                           OutlinedButton.icon(
                             onPressed: _copyQRCode,
                             icon: const Icon(Icons.copy, size: 18),
-                            label: const Text('Copy QR Code'),
+                            label: const Text('ກ໋ອບປີ້ QR Code'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: const Color(0xFF1E88E5),
                               side: const BorderSide(color: Color(0xFF1E88E5)),
@@ -553,59 +531,6 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                         ],
                       ),
                     ),
-                    
-                    const SizedBox(height: 28),
-                    
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.blue.shade100,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.blue.shade700,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _paymentStatus,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    color: Colors.blue.shade900,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Payment will be confirmed automatically',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.blue.shade700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 24),
                     
                     Container(
                       padding: const EdgeInsets.all(20),
@@ -625,7 +550,7 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                'How to Pay',
+                                'ວິທີການຊຳລະເງິນ',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -635,10 +560,10 @@ class _QRPaymentPageState extends State<QRPaymentPage> {
                             ],
                           ),
                           const SizedBox(height: 16),
-                          _buildInstructionStep('1', 'Open your banking app'),
-                          _buildInstructionStep('2', 'Select QR Payment'),
-                          _buildInstructionStep('3', 'Scan the code above'),
-                          _buildInstructionStep('4', 'Confirm the amount'),
+                          _buildInstructionStep('1', 'ເປີດແອັບທະນາຄານຂອງທ່ານ'),
+                          _buildInstructionStep('2', 'ເລືອກການຊຳລະເງິນ QR'),
+                          _buildInstructionStep('3', 'ສະແກນ QR ຂ້າງເທິງ'),
+                          _buildInstructionStep('4', 'ຢືນຢັນຈຳນວນເງິນ ແລະ ຊຳລະເງິນ'),
                         ],
                       ),
                     ),

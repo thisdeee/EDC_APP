@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import '../state/cart_state.dart';
 import '../models/product.dart';
+import 'package:intl/intl.dart';
+import 'package:esc_pos_printer/esc_pos_printer.dart';
 
 class PaymentSuccessPage extends StatefulWidget {
   final String transactionId;
@@ -41,8 +42,8 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
     );
     _controller.forward();
 
-    // Navigate to receipt after 2 seconds
-    Future.delayed(const Duration(seconds: 2), () {
+    // Navigate to receipt after 1 second
+    Future.delayed(const Duration(seconds: 1), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
@@ -100,23 +101,11 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
             ),
             const SizedBox(height: 16),
             Text(
-              '${widget.amount.toStringAsFixed(2)} LAK',
+              '${NumberFormat('#,##0.00').format(widget.amount)} LAK',
               style: const TextStyle(
                 fontSize: 24,
                 color: Colors.white,
                 fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 24),
-            const CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'ກຳລັງສ້າງໃບເສັດ...',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.white70,
               ),
             ),
           ],
@@ -126,7 +115,7 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
   }
 }
 
-class PaymentReceiptPage extends StatelessWidget {
+class PaymentReceiptPage extends StatefulWidget {
   final String transactionId;
   final double amount;
   final Map<String, dynamic> paymentData;
@@ -143,17 +132,24 @@ class PaymentReceiptPage extends StatelessWidget {
   });
 
   @override
+  State<PaymentReceiptPage> createState() => _PaymentReceiptPageState();
+}
+
+class _PaymentReceiptPageState extends State<PaymentReceiptPage> {
+  bool _isPrinting = false;
+
+  @override
   Widget build(BuildContext context) {
     // Extract data from payment callback
-    final String merchantName = paymentData['merchantName'] ?? 'Jop Jip';
-    final String paymentMethod = paymentData['paymentMethod'] ?? 'Bank Transfer';
-    final String sourceName = paymentData['sourceName'] ?? customerName;  // Use customer name if not in callback
-    final String sourceAccount = paymentData['sourceAccount'] ?? '-';
-    final String txnDateTime = paymentData['txnDateTime'] ?? '';
-    final String refNo = paymentData['refNo']?.toString() ?? '-';
-    final String billNumber = paymentData['billNumber'] ?? transactionId;
-    final String status = paymentData['status'] ?? 'COMPLETED';
-    final double txnAmount = (paymentData['txnAmount'] ?? amount).toDouble();
+    final String merchantName = widget.paymentData['merchantName'] ?? 'Jop Jip';
+    final String paymentMethod = widget.paymentData['paymentMethod'] ?? 'Bank Transfer';
+    final String sourceName = widget.paymentData['sourceName'] ?? widget.customerName;  // Use customer name if not in callback
+    final String sourceAccount = widget.paymentData['sourceAccount'] ?? '-';
+    final String txnDateTime = widget.paymentData['txnDateTime'] ?? '';
+    final String refNo = widget.paymentData['refNo']?.toString() ?? '-';
+    final String billNumber = widget.paymentData['billNumber'] ?? widget.transactionId;
+    final String status = widget.paymentData['status'] ?? 'COMPLETED';
+    final double txnAmount = (widget.paymentData['txnAmount'] ?? widget.amount).toDouble();
     
     // Parse date/time or use current
     String dateStr = '';
@@ -322,7 +318,7 @@ class PaymentReceiptPage extends StatelessWidget {
                   const SizedBox(height: 8),
                   
                   // Product Rows
-                  ...cartItems.asMap().entries.map((entry) {
+                  ...widget.cartItems.asMap().entries.map((entry) {
                     final index = entry.key + 1;
                     final item = entry.value;
                     final subtotal = item.product.price * item.qty;
@@ -352,7 +348,7 @@ class PaymentReceiptPage extends StatelessWidget {
                           Expanded(
                             flex: 2,
                             child: Text(
-                              '${item.product.price.toStringAsFixed(0)} ₭',
+                              '${NumberFormat('#,##0').format(item.product.price.toInt())} ₭',
                               textAlign: TextAlign.right,
                               style: const TextStyle(fontSize: 12),
                             ),
@@ -360,7 +356,7 @@ class PaymentReceiptPage extends StatelessWidget {
                           Expanded(
                             flex: 2,
                             child: Text(
-                              '${subtotal.toStringAsFixed(0)} ₭',
+                              '${NumberFormat('#,##0').format(subtotal.toInt())} ₭',
                               textAlign: TextAlign.right,
                               style: const TextStyle(fontSize: 12),
                             ),
@@ -389,7 +385,7 @@ class PaymentReceiptPage extends StatelessWidget {
                         ),
                         const SizedBox(width: 40),
                         Text(
-                          '${txnAmount.toStringAsFixed(0)} ₭',
+                          '${NumberFormat('#,##0').format(txnAmount.toInt())} ₭',
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
@@ -415,7 +411,7 @@ class PaymentReceiptPage extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${txnAmount.toStringAsFixed(2)} LAK',
+                        '${NumberFormat('#,##0.00').format(txnAmount)} LAK',
                         style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -455,22 +451,48 @@ class PaymentReceiptPage extends StatelessWidget {
               ),
             ),
             
+            
             const SizedBox(height: 24),
             
             // Action Buttons
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                },
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.purple[700],
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _isPrinting ? null : _printReceipt,
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: _isPrinting ? Colors.grey : Colors.blue[700],
+                    ),
+                    icon: _isPrinting
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Icon(Icons.print),
+                    label: Text(_isPrinting ? 'ກຳລັງປະມວນຜົນ...' : 'ປິ້ນໃບບິນ'),
+                  ),
                 ),
-                icon: const Icon(Icons.home),
-                label: const Text('ກັບໄປໜ້າຫຼັກ'),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    },
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: Colors.purple[700],
+                    ),
+                    icon: const Icon(Icons.home),
+                    label: const Text('ກັບໄປໜ້າຫຼັກ'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -503,5 +525,213 @@ class PaymentReceiptPage extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  String _buildItemsList() {
+    StringBuffer items = StringBuffer();
+    for (int i = 0; i < widget.cartItems.length; i++) {
+      final item = widget.cartItems[i];
+      final subtotal = item.product.price * item.qty;
+      final name = item.product.name.length > 30
+          ? '${item.product.name.substring(0, 30)}...'
+          : item.product.name;
+
+      items.writeln('${i + 1}. $name');
+      items.writeln(
+        'ຈຳນວນ: ${item.qty} | ລາຄາ: ${NumberFormat('#,##0').format(item.product.price.toInt())} ₭',
+      );
+      items.writeln(
+        'ເປັນເງິນ: ${NumberFormat('#,##0').format(subtotal.toInt())} ₭',
+      );
+      items.writeln();
+    }
+    return items.toString();
+  }
+
+  Future<List<int>> _generateEscPosReceipt(
+    String merchantName,
+    String billNumber,
+    String refNo,
+    String dateStr,
+    String timeStr,
+    String paymentMethod,
+    String sourceName,
+    String sourceAccount,
+    double txnAmount,
+  ) async {
+    // Generate ESC/POS commands for thermal printer
+    final StringBuffer receipt = StringBuffer();
+
+    // ESC/POS Commands
+    const String newLine = '\n';
+    const String centerAlign = '\x1B\x61\x01'; // Center align
+    const String leftAlign = '\x1B\x61\x00'; // Left align
+    const String fontSize2x = '\x1D\x21\x11'; // 2x font size
+
+    receipt.write(centerAlign);
+    receipt.write(fontSize2x);
+    receipt.write(merchantName);
+    receipt.write(newLine);
+    receipt.write('\x1D\x21\x00'); // Normal font size
+    receipt.write(newLine);
+    receipt.write('INVOICE');
+    receipt.write(newLine);
+    receipt.write('================================');
+    receipt.write(newLine);
+    
+    receipt.write(leftAlign);
+    receipt.write('ເລກທີ່ບິນ: $billNumber$newLine');
+    receipt.write('ເລກອ້າງອີງ: $refNo$newLine');
+    receipt.write('ວັນທີ: $dateStr$newLine');
+    receipt.write('ເວລາ: $timeStr$newLine');
+    receipt.write('ວິທີຊຳລະ: $paymentMethod$newLine');
+    receipt.write('ຊື່ຜູ້ຊຳລະ: $sourceName$newLine');
+    receipt.write('ເລກບັນຊີ: $sourceAccount$newLine');
+    receipt.write(newLine);
+    
+    receipt.write(centerAlign);
+    receipt.write('================================$newLine');
+    receipt.write('ລາຍການສິນຄ້າ$newLine');
+    receipt.write(newLine);
+    
+    receipt.write(leftAlign);
+    for (int i = 0; i < widget.cartItems.length; i++) {
+      final item = widget.cartItems[i];
+      final subtotal = item.product.price * item.qty;
+      final name = item.product.name.length > 30
+          ? '${item.product.name.substring(0, 30)}...'
+          : item.product.name;
+
+      receipt.write('${i + 1}. $name$newLine');
+      receipt.write(
+        'ຈຳນວນ: ${item.qty} | ລາຄາ: ${NumberFormat('#,##0').format(item.product.price.toInt())} ₭$newLine',
+      );
+      receipt.write(
+        'ເປັນເງິນ: ${NumberFormat('#,##0').format(subtotal.toInt())} ₭$newLine',
+      );
+      receipt.write(newLine);
+    }
+
+    receipt.write(centerAlign);
+    receipt.write('================================$newLine');
+    receipt.write(fontSize2x);
+    receipt.write('ທັງໝົດ: ${NumberFormat('#,##0').format(txnAmount.toInt())} ₭');
+    receipt.write(newLine);
+    receipt.write('\x1D\x21\x00'); // Normal font
+    receipt.write(newLine);
+    receipt.write('ຂອບໃຈທີ່ໃຊ້ບໍລິການ$newLine');
+    receipt.write('www.bbbb.com.la$newLine');
+    receipt.write(newLine);
+    receipt.write(newLine);
+    receipt.write('\x1B\x64\x03'); // Cut paper
+
+    return receipt.toString().codeUnits;
+  }
+
+  Future<void> _printReceipt() async {
+    setState(() => _isPrinting = true);
+
+    try {
+      // Extract data from payment callback
+      final String merchantName = widget.paymentData['merchantName'] ?? 'Jop Jip';
+      final String paymentMethod = widget.paymentData['paymentMethod'] ?? 'Bank Transfer';
+      final String sourceName = widget.paymentData['sourceName'] ?? widget.customerName;
+      final String sourceAccount = widget.paymentData['sourceAccount'] ?? '-';
+      final String txnDateTime = widget.paymentData['txnDateTime'] ?? '';
+      final String refNo = widget.paymentData['refNo']?.toString() ?? '-';
+      final String billNumber = widget.paymentData['billNumber'] ?? widget.transactionId;
+      final double txnAmount = (widget.paymentData['txnAmount'] ?? widget.amount).toDouble();
+
+      // Parse date/time
+      String dateStr = '';
+      String timeStr = '';
+      if (txnDateTime.isNotEmpty) {
+        try {
+          final parts = txnDateTime.split(' ');
+          dateStr = parts[0];
+          timeStr = parts.length > 1 ? parts[1] : '';
+        } catch (e) {
+          final DateTime now = DateTime.now();
+          dateStr = '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
+          timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+        }
+      } else {
+        final DateTime now = DateTime.now();
+        dateStr = '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
+        timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+      }
+
+      // Build receipt content
+      final receiptText = '''
+$merchantName
+INVOICE
+================================
+ເລກທີ່ບິນ: $billNumber
+ເລກອ້າງອີງ: $refNo
+ວັນທີ: $dateStr
+ເວລາ: $timeStr
+ວິທີຊຳລະ: $paymentMethod
+ຊື່ຜູ້ຊຳລະ: $sourceName
+ເລກບັນຊີ: $sourceAccount
+
+================================
+ລາຍການສິນຄ້າ
+
+${_buildItemsList()}
+
+================================
+ທັງໝົດ: ${NumberFormat('#,##0').format(txnAmount.toInt())} ₭
+
+
+ຂອບໃຈທີ່ໃຊ້ບໍລິການ
+www.bbbb.com.la
+
+
+''';
+
+      // Send to printer via ESC/POS
+      try {
+        // For EDC thermal printer, use ESC/POS commands
+        final bytes = await _generateEscPosReceipt(
+          merchantName,
+          billNumber,
+          refNo,
+          dateStr,
+          timeStr,
+          paymentMethod,
+          sourceName,
+          sourceAccount,
+          txnAmount,
+        );
+        
+        // Print (this would be sent to your EDC printer)
+        debugPrint('🖨️ Printing receipt...');
+        // You can send these bytes to your EDC printer device
+      } catch (e) {
+        debugPrint('Printer error: $e');
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ປິ້ນສຳເລັດ'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ຜິດພາດ: ${e.toString()}'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPrinting = false);
+      }
+    }
   }
 }

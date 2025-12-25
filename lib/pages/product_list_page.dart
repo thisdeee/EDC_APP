@@ -4,6 +4,8 @@ import '../state/cart_state.dart';
 import '../services/api_service.dart';
 import 'product_detail_page.dart';
 import 'cart_page.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Widget that tries multiple image paths
 class _ImageWithMultiplePaths extends StatefulWidget {
@@ -86,10 +88,33 @@ class _ProductListPageState extends State<ProductListPage> {
   String _query = '';
   String _category = 'All';
   String _stockFilter = 'All'; // All, In Stock, Out of Stock
+  bool _showSearch = false;
+
+  String _userName = 'User';
+  String _userPhone = '';
+
+  // Helper function to format price with comma separators
+  String _formatPrice(double price) {
+    final formatter = NumberFormat('#,##0', 'en_US');
+    return formatter.format(price.toInt());
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _userName = prefs.getString('shopName') ?? 'User';
+        _userPhone = prefs.getString('shopPhone') ?? '';
+      });
+    } catch (e) {
+      debugPrint('[ERROR] Failed to load user data: $e');
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    _loadUserData();
     _loadProducts();
   }
 
@@ -292,12 +317,21 @@ class _ProductListPageState extends State<ProductListPage> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Jop Jip',
+            Text(_userName,
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            Text('+856 020 76837072', style: TextStyle(fontSize: 12)),
+            Text(_userPhone.isEmpty ? '' : _userPhone, style: TextStyle(fontSize: 12)),
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () {
+              setState(() => _showSearch = !_showSearch);
+              if (_showSearch) {
+                FocusScope.of(context).nextFocus();
+              }
+            },
+          ),
           Stack(
             children: [
               IconButton(
@@ -333,66 +367,23 @@ class _ProductListPageState extends State<ProductListPage> {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: Colors.white,
-                    prefixIcon: const Icon(Icons.search),
-                    hintText: 'ຄົ້ນຫາສິນຄ້າ...',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
+          if (_showSearch)
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: TextField(
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.white,
+                  prefixIcon: const Icon(Icons.search),
+                  hintText: 'ຄົ້ນຫາສິນຄ້າ...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
                   ),
-                  onChanged: (v) => setState(() => _query = v),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('ຜະລິດຕະພັນຍອດນິຍົມ',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold)),
-                    Row(
-                      children: [
-                        // DropdownButton<String>(
-                        //   value: _stockFilter,
-                        //   underline: const SizedBox(),
-                        //   items: [
-                        //     DropdownMenuItem(
-                        //         value: 'All', child: Text('All Stock')),
-                        //     DropdownMenuItem(
-                        //         value: 'In Stock', child: Text('In Stock')),
-                        //     DropdownMenuItem(
-                        //         value: 'Out of Stock',
-                        //         child: Text('Out of Stock')),
-                        //   ],
-                        //   onChanged: (v) =>
-                        //       setState(() => _stockFilter = v ?? 'All'),
-                        // ),
-                        // const SizedBox(width: 8),
-                        // DropdownButton<String>(
-                        //   value: _category,
-                        //   underline: const SizedBox(),
-                        //   items: categories
-                        //       .map((c) =>
-                        //           DropdownMenuItem(value: c, child: Text(c)))
-                        //       .toList(),
-                        //   onChanged: (v) =>
-                        //       setState(() => _category = v ?? 'All'),
-                        // ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
+                onChanged: (v) => setState(() => _query = v),
+              ),
             ),
-          ),
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -502,7 +493,7 @@ class _ProductListPageState extends State<ProductListPage> {
                                                       .spaceBetween,
                                               children: [
                                                 Text(
-                                                  '₭ ${p.price.toStringAsFixed(0)}',
+                                                  '₭ ${_formatPrice(p.price)}',
                                                   style: const TextStyle(
                                                       fontSize: 14,
                                                       fontWeight:

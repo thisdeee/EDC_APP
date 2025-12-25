@@ -563,9 +563,6 @@ class _ProductListPageState extends State<ProductListPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('ຜະລິດຕະພັນຍອດນິຍົມ',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold)),
                     Row(
                       children: [
                         DropdownButton<String>(
